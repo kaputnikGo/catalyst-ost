@@ -4,7 +4,8 @@
    // env: linuxmint 18 - Minty Fresh
 
    // ASSUMPTION anglo-saxon naming convention of a single capitalised first name & surname
-   // columns spearated by a comma ($delimiter = ",")
+   // columns spearated by a comma ($delimiter = ","), and Gaelic "descendant" abbr.
+   // NOT looking for MacGregor, will result in Macgregor
 
    // ASSUMPTION email check will not check that domain name resolves to an actual mail server 
    // domain, errors to be outputted to terminal
@@ -15,25 +16,30 @@
 
    // ASSUMPTION spec is for a program that enters data into db, no mention of db edits etc.
    // this program will therefore only add entries that do not already exist
+
+   // ASSUMPTION not informing the user that dupes of emails exist and not going into DB
+
+   // ASSUMPTION this program is not used in a public or production environment,
+   // rather is for demo purposes in a localhost dev type environment
  
 
    //TODO
       // global vars... pass by ref
-      // at DB entry strips ' from O'Really names
       // sane and proper into classes
       // sql checks
       // cmdline options proper
       // help display better info
       // order of execution in php
 
-// VARS
+// GLOBAL VARS
    // set up empty 2D array for entries of 3 fields
    $entryArray = array(array("","",""));
    $dbhost = "localhost"; // default, to be set by user
    $dbuser = "catOST"; // default, to be set by user
    $dbpass = "password"; // default, to be set by user
-   $dbname = "catalyst_ost"; // default
    $dbtable = "users"; // set as per spec
+//TODO this for local dev test only, rem at submission
+   $dbname = "catalyst_ost"; // dev machine
 
 // SQL FUNCTIONS
    function getMySQLVersion() { 
@@ -42,15 +48,41 @@
       return $version[0]; 
    }
 
+   function checkDBready() {
+      global $dbhost;
+      global $dbuser;
+      global $dbpass;
+
+      $missing = FALSE;
+
+      if (empty($dbhost)) {
+         print "\nWARN: Database host name missing.\n";
+         $missing = TRUE;
+      }
+      if (empty($dbuser)) {
+         print "\nWARN: Database user name missing.\n";
+         $missing = TRUE;
+      }
+      if (empty($dbpass)) {
+         print "\nWARN: Database pass word missing.\n";
+         $missing = TRUE;
+      }
+      if ($missing) {
+         outputHelp();
+         interceptExit();
+      }
+   }
+
    function createDB() {
       global $dbhost;
       global $dbuser;
       global $dbpass;
-      global $dbname;
       global $dbtable;
+      global $dbname; // TODO rem
 
-      // TODO $db vars check
+      checkDBready();
 
+// TODO rem $dbname at submission
       $sqlConn = new mysqli($dbhost, $dbuser, $dbpass, $dbname);
       if ($sqlConn->connect_error) {
          die("\nSQL Connection failed: ".$sqlConn->connect_error)."\n";
@@ -96,18 +128,19 @@
       
    }
 
-   function prepEntriesDB() {
+   function prepEntriesDB($entryArray) {
       // remove headings entry
+
       // check for null email, delete from array
-      // can option here for check and edit instead of delete
-      global $entryArray;
+      // NOTE: can option here for user check and edit instead of delete
+      // function remains as placeholder
+      
       $counter = 0;
    
       foreach ($entryArray as $entry) {
          if (($entry[0] === "name") 
                && ($entry[1] === "surname") 
                && ($entry[2] === "email")) {
-            print "\nheadings entry: ".$entryArray[$counter][0]."\n";
             unset($entryArray[$counter]);
          }
          else if ($entry[2] === NULL) {
@@ -118,19 +151,23 @@
       return TRUE;  
    } 
 
-   function addEntries() {
+   function addEntries($entryArray) {
       // TODO assume has db, have set dbhost,dbuser,dbpass, has array
       global $dbhost;
       global $dbuser;
       global $dbpass;
-      global $dbname;
       global $dbtable;
-      global $entryArray;
+      global $dbname; // TODO rem
       
-      if (prepEntriesDB()) {
+      checkDBready();
+
+      print "\nAdding entries from file to database...\n";
+     
+      if (prepEntriesDB($entryArray)) {
          $checkNum = sizeof($entryArray); 
          $counter = 0;
 
+// TODO rem $dbname at submission
          $sqlConn = new mysqli($dbhost, $dbuser, $dbpass, $dbname);
          if ($sqlConn->connect_error) {
             die("\nSQL Connection failed: ".$sqlConn->connect_error)."\n";
@@ -150,16 +187,17 @@
          $sqlStatement->close();
          $sqlConn->close();
 
+         
          //checker
          if ($counter === $checkNum) {
-            print "DB entry number matches array size.\n";
+            print "Database entry complete.\n";
          }
          else {
-            print "DB entry number mismatch (count, size): ".$counter.", ".$checkNum."\n";
+            print "\nWARN: Database entry number mismatch (count, size): ".$counter.", ".$checkNum."\n";
          }
       }
       else {
-         //
+         print "\nWARN: Failed to prepare entries for database.\n";
       }
    }
    
@@ -178,11 +216,6 @@
       return $str;
    }
 
-   function cleanSQLstring($str) {
-      //TODO
-      //$str = mysql_real_escape_string($str);
-   }
-
    function filenameCheck($str) {
       // check file is a .csv filename
       if(strpos($str, ".csv") !== FALSE) {
@@ -194,18 +227,32 @@
 
    function nameFormatAnglo($str) {
       // Capitalised String Function, remove non alpha chars
-      $str = preg_replace("/[^a-zA-Z]/", "", $str);
+      // allow ' (apostrophe) and - (hyphen) as valid char in name
+      $str = preg_replace("/[^a-zA-Z'-]/", "", $str);
       $str = strtolower($str);
       $str = ucfirst($str);
+      // specific: need check for "O'Conner" etc, capitalised after the apostrophe.
+      if (strpos($str, "'") == 1) {
+         $str = join("'", array_map("ucfirst", array_map("strtolower", explode("'", $str))));
+      }
+      // or have a hyphenated name
+      if (strpos($str, "-") !== FALSE) {
+         $str = join("-", array_map("ucfirst", array_map("strtolower", explode("-", $str))));
+      }
       return $str;
    }
 
    function simpleEmailCheck($str) {
       // only checks format of email string, not TLD validity etc
       // spec requests emails to lowercase
-      $str = strtolower($str);
-      if(filter_var($str, FILTER_VALIDATE_EMAIL)) {
+      // NOTE common allows for emails names (RFC 3696):
+      /*
+         a–z, A–Z, 0-9, !#$%&'*+-/=?^_`{|}~ 
+      */
+
+      if (filter_var($str, FILTER_VALIDATE_EMAIL)) {
          // valid address
+         $str = strtolower($str);
          return $str;
       }
       else {
@@ -220,21 +267,59 @@
 
 
 // FUNCTIONS
-
    function outputHelp() {
       // make a bit verbose for proper help...
-      print "\n-----------------------------\n";
-      print "USER DATABASE ENTRY PROGRAM\n";
-      print "instructions for use:\n\n";
+      print "\n-------------------------------------------------------------------------------\n\n";
+      print ":: USER DATABASE ENTRY DEMO PROGRAM :: \n\n";
+      print "A program that accepts a .csv file for inputting into an existing database.\n";
+      print "Coarse checks and cleans are made over the names and email addresses inputted.\n";
+      print "Unless requested from management, there is no option for editing entries.\n";
+      print "This program expects benevolent and dispassionate user interaction only.\n";
+      print "\nCommand line use:\n\n";
       print "user_upload.php [--file][--dry_run][h][-u][-p][--create_table][--help]\n";
-      print "--file [.csv filename]\n".          
-            "--dry_run (used with --file, parses file for content but NO db actions\n".
+      print "--file (csv file of name, surname, email)\n".          
+            "--dry_run (used with --file, parses file for content but NO db actions)\n".
             "-h (sql host)\n".            
             "-u (sql username)\n".
             "-p (sql password)\n".
             "--create_table (creates db table no other action taken)\n".
             "--help (print this menu)\n";
-      print "\n-----------------------------\n\n";
+      print "\n-------------------------------------------------------------------------------\n\n";
+   }
+
+   function processFileContents($entryArray) {
+      // according to spec first line of file is headings "name,surname,email"
+      $contentNum = sizeof($entryArray);
+      //ignore $fileContents[0] assume headings
+
+      print "\nProcess file contents, format entries:\n";
+
+      $lineNums = 0;
+      foreach($entryArray as $entry) {
+         
+         if ($lineNums == 0) { 
+            // del first entry as it 'should' be the headings
+            unset($entryArray[$lineNums]);            
+            $lineNums++;
+            continue; 
+         }
+         // first name
+         $entryArray[$lineNums][0] = nameFormatAnglo($entry[0]);
+         // surname
+         $entryArray[$lineNums][1] = nameFormatAnglo($entry[1]);
+         // email check, can return NULL
+         $entryArray[$lineNums][2] = simpleEmailCheck($entry[2]);
+         if ($entry[2] === NULL) {
+            // have error in email
+            // option to manually fix email?
+            print $entryArray[$lineNums][0].
+                  ",".$entryArray[$lineNums][1].
+                  ", INVALID EMAIL.\n";
+         }
+         $lineNums++;
+      }
+      print "\nEnd of file processing.\n\n";
+      addEntries($entryArray);
    }
 
    function parseFilename($fileHandle) {
@@ -261,7 +346,7 @@
             }
             fclose($rawFile);
             print "OK. file closed after $lineNums lines read.\n\n";
-            processFileContents();
+            processFileContents($entryArray);
          } 
          else {
             // error opening the file.
@@ -275,47 +360,6 @@
       }
    }
 
-   function processFileContents() {
-      // according to spec first line of file is headings "name,surname,email"
-      global $entryArray;
-
-      $contentNum = sizeof($entryArray);
-      //ignore $fileContents[0] assume headings
-
-      print "\nProcess file contents, format entries:\n";
-
-      $lineNums = 0;
-      foreach($entryArray as $entry) {
-         
-         if ($lineNums == 0) { 
-            $lineNums++;
-            // skip first entry as it 'should' be the headings
-            continue; 
-         }
-         // first name
-         $entryArray[$lineNums][0] = nameFormatAnglo($entry[0]);
-         // surname
-         $entryArray[$lineNums][1] = nameFormatAnglo($entry[1]);
-         // email check, can return NULL
-         $entryArray[$lineNums][2] = simpleEmailCheck($entry[2]);
-         if ($entry[2] === NULL) {
-            // have error in email
-            // option to manually fix email?
-            print $entryArray[$lineNums][0].
-                  ",".$entryArray[$lineNums][1].
-                  ", INVALID EMAIL.\n";
-         }
-         else {
-            print $entryArray[$lineNums][0].
-                  ",".$entryArray[$lineNums][1].
-                  ",".$entryArray[$lineNums][2]."\n";
-         }
-         $lineNums++;
-      }
-      print "\nend of array print.\n\n";
-      addEntries();
-   }
-
    function dryRun() {
       global $entryArray;
 
@@ -325,7 +369,7 @@
       if (sizeof($entryArray) >= 2) {
          // assume have at least one entry as well as headings
          print "\nDry_run has an array to work with.\n";
-         processFileContents();
+         processFileContents($entryArray);
       }
       else {
          print "\nDry_run did not find any entries to work with.\n";
@@ -391,18 +435,19 @@
       }
    }
 
-
-
+   function runtime($argc, $argv) {
 
       $optionsArray = array("");
-
-      print "\n------------------------\n";
-      print "env info:\n";
+      print "\n--------------------------------------------\n";
+      print "USER DATABASE ENTRY DEMO PROGRAM\n";
+      print "CSV file (name, surname, email) to database.\n";
+      print "\n";
+      print "\nenv info:";
       $phpv = phpversion();
       print "\nphp version: $phpv";
       $mysqlv = getMySQLVersion();
       print "\nmysql version: $mysqlv";
-      print "\n------------------------\n\n";
+      print "\n--------------------------------------------\n\n";
    // CMDLINE ARGS
 
       // $argc = number of arguments passed 
@@ -426,13 +471,9 @@
             $argsCount++;
          }
          parseOptions($optionsArray);
-   //TODO
-   // rem interceptExit() to allow program to continue 
-         //interceptExit();
       }
+   }
 
-
-
-
+runtime($argc, $argv);
 
 ?>
