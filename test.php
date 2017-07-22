@@ -34,9 +34,9 @@
 // GLOBAL VARS
    // set up empty 2D array for entries of 3 fields
    $entryArray = array(array("","",""));
-   $dbhost = "localhost"; // default, to be set by user
-   $dbuser = "catOST"; // default, to be set by user
-   $dbpass = "password"; // default, to be set by user
+   $dbhost = ""; // dev: localhost, to be set by user
+   $dbuser = ""; // dev: catOST, to be set by user
+   $dbpass = ""; // dev: password, to be set by user
    $dbtable = "users"; // set as per spec
 //TODO this for local dev test only, rem at submission
    $dbname = "catalyst_ost"; // dev machine
@@ -46,6 +46,31 @@
       $output = shell_exec('mysql -V'); 
       preg_match('@[0-9]+\.[0-9]+\.[0-9]+@', $output, $version); 
       return $version[0]; 
+   }
+
+   function testDBconnect() {
+      // undocumented dev debug, just in case
+      print "\nTEST: database connection:";
+      global $dbhost;
+      global $dbuser;
+      global $dbpass;
+      global $dbname; // TODO rem
+
+      if (empty($dbhost) || empty($dbuser) || empty($dbpass)) {
+         print "\nWARN: either db host,user or pass info missing.\n";
+      }
+      else {
+        // TODO rem $dbname at submission
+         $sqlConn = new mysqli($dbhost, $dbuser, $dbpass, $dbname);
+         if ($sqlConn->connect_error) {
+            print "\nSQL Connection failed: ".$sqlConn->connect_error."\n";
+         } 
+         else {
+            print "\nSQL connection successful, closing...\n";
+         }
+         $sqlConn->close();
+         interceptExit();
+      }
    }
 
    function checkDBready() {
@@ -68,6 +93,7 @@
          $missing = TRUE;
       }
       if ($missing) {
+         print "Halting program with no database actions performed.\n";
          outputHelp();
          interceptExit();
       }
@@ -210,7 +236,7 @@
    }
 
    function cleanStringInput($str) {
-      $str = @strip_tags($str);
+      $str = @strip_tags($str, ".");
       $str = @stripslashes($str);
       $str = preg_replace('/\s+/', '', $str);
       return $str;
@@ -272,29 +298,36 @@
       print "\n-------------------------------------------------------------------------------\n\n";
       print ":: USER DATABASE ENTRY DEMO PROGRAM :: \n\n";
       print "A program that accepts a .csv file for inputting into an existing database.\n";
+      print "Database host, username, password need to be set prior to attempting to \n";
+      print "populate database.\n\n";
       print "Coarse checks and cleans are made over the names and email addresses inputted.\n";
       print "Unless requested from management, there is no option for editing entries.\n";
       print "This program expects benevolent and dispassionate user interaction only.\n";
       print "\nCommand line use:\n\n";
       print "user_upload.php [--file][--dry_run][h][-u][-p][--create_table][--help]\n";
-      print "--file (csv file of name, surname, email)\n".          
-            "--dry_run (used with --file, parses file for content but NO db actions)\n".
-            "-h (sql host)\n".            
-            "-u (sql username)\n".
-            "-p (sql password)\n".
-            "--create_table (creates db table no other action taken)\n".
-            "--help (print this menu)\n";
+      print "\t--file (csv file of name, surname, email)\n".          
+            "\t--dry_run (include after --file, parses file for content but NO db actions)\n".
+            "\t-h (sql host)\n".            
+            "\t-u (sql username)\n".
+            "\t-p (sql password)\n".
+            "\t--create_table (creates db table no other action taken)\n".
+            "\t--help (print this menu)\n";
+
+      print "\nExample usage:\n \t> user_upload.php --file users.csv --dry_run\n";
+      print "\t> user_upload.php -h localhost -u myuser -p password --create_table\n";
+      print "\t> user_upload.php -h localhost -u myuser -p password --file users.csv\n";
       print "\n-------------------------------------------------------------------------------\n\n";
    }
 
-   function processFileContents($entryArray) {
+   function processFileContents($entryArray, $dbentry) {
       // according to spec first line of file is headings "name,surname,email"
-      $contentNum = sizeof($entryArray);
       //ignore $fileContents[0] assume headings
 
       print "\nProcess file contents, format entries:\n";
 
+      $contentNum = sizeof($entryArray);
       $lineNums = 0;
+
       foreach($entryArray as $entry) {
          
          if ($lineNums == 0) { 
@@ -319,13 +352,21 @@
          $lineNums++;
       }
       print "\nEnd of file processing.\n\n";
-      addEntries($entryArray);
+   
+      if ($dbentry === TRUE) {
+         print "\nAdd entries.\n";
+         addEntries($entryArray);
+      }
+      else {
+         print "\nEntries not added.\n";
+      }
    }
 
-   function parseFilename($fileHandle) {
-      // this is the full option with file and db entry, 
+   function parseFilename($fileHandle, $dbentry) {
+      // this could be full option with file and db entry, or dry_run 
       // reqs: dbhost, dbuser, dbpass
-      // check it first
+      // check it first, default to no db actions
+      if ($dbentry === NULL) $dbentry = FALSE;
 
       global $entryArray;
 
@@ -346,7 +387,7 @@
             }
             fclose($rawFile);
             print "OK. file closed after $lineNums lines read.\n\n";
-            processFileContents($entryArray);
+            processFileContents($entryArray, $dbentry);
          } 
          else {
             // error opening the file.
@@ -355,11 +396,12 @@
          }
       }
       else {
-         print "unknown file type: ".$str;
+         print "unknown file: ".$fileHandle;
          interceptExit();
       }
    }
 
+/*
    function dryRun() {
       global $entryArray;
 
@@ -369,7 +411,7 @@
       if (sizeof($entryArray) >= 2) {
          // assume have at least one entry as well as headings
          print "\nDry_run has an array to work with.\n";
-         processFileContents($entryArray);
+         processFileContents($entryArray, FALSE);
       }
       else {
          print "\nDry_run did not find any entries to work with.\n";
@@ -377,39 +419,37 @@
          interceptExit();
       }
    }
+*/
 
    function parseSQLusername($str) {
+      global $dbuser;
       // check it first
-      print "\nSQL username: ".$str."\n";
+      $dbuser = cleanStringInput($str);
+      print "\nSQL username: ".$dbuser."\n";
    }
 
    function parseSQLpassword($str) {
+      global $dbpass;
       // check it first and print teh passw0rdz!!
-      print "\nSQL password: ".$str."\n";
+      $dbpass = cleanStringInput($str);
+      print "\nSQL password: ".$dbpass."\n";
    }
 
    function parseSQLhost($str) {
-      // check it first
+      global $dbhost;      
+      // TODO check it first, could be ip
+      $dbhost = $str;
       print "\nSQL host: ".$str."\n";
+      
    }
 
-   function parseOptions($optionsArray) {
-      // yup
-      print "\nparsing options...\n";
+   function parseSQLoptions($optionsArray) {
       $optionNum = 0;
- 
-      // check that an option with corresponding entry actually has one,ie:
-      // "--filename filenametxt" not "--filename --help --iamidiot"
-
       foreach($optionsArray as $option) {
          if (substr($option[0], 0, 1) == "-") {
             switch ($option) {
-               case "--file":
-                  parseFilename($optionsArray[$optionNum + 1]);
-                  break;
-               case "--dry_run":
-                  // check for filename
-                  dryRun();
+               case "-h":
+                  parseSQLhost($optionsArray[$optionNum + 1]);
                   break;
                case "-u":
                   parseSQLusername($optionsArray[$optionNum + 1]);
@@ -417,21 +457,62 @@
                case "-p":
                   parseSQLpassword($optionsArray[$optionNum + 1]);
                   break;
-               case "-h":
-                  parseSQLhost($optionsArray[$optionNum + 1]);
-                  break;
                case "--create_table":
-                  createTable();
-                  break;
                case "--help":
-                  outputHelp();
+               case "--test":
+               case "--file":
+               case "--dry_run":
+                  // skip above
                   break;
                default:
                   print "\nunknown option found: ".$optionsArray[$optionNum]."\n";
-            }                 
+                  outputHelp();
+                  interceptExit();
+            }
          }
-         // end of substr check
          $optionNum++;
+      }      
+   }
+
+   function parseOptions($optionsArray) {
+      // yup, without using a lib
+      // TODO check that an option with corresponding entry actually has one,ie:
+      // "--filename filenametxt" not "--filename --help --iamidiot"
+
+      print "\nparsing options...\n";
+
+      // need to check $optionsArray for dependencies
+      $fileOpt = array_search("--file", $optionsArray);
+      $dryOpt = array_search("--dry_run", $optionsArray);
+      $dbOpt = array_search("--create_table", $optionsArray);
+      $testOpt = array_search("--test", $optionsArray);
+     
+      if (($dryOpt >= 1) && ($fileOpt === FALSE)) {
+         // d'oh
+         print "\nWARN: a filename option was not found.\n";
+         outputHelp();
+         interceptExit();
+      }      
+      elseif (($dryOpt >= 1) && ($fileOpt >= 1)) {
+         parseFilename($optionsArray[$fileOpt + 1], FALSE);
+      }
+      elseif ($fileOpt >= 1) {
+         // check have sql connection info
+         parseSQLoptions($optionsArray);
+         parseFilename($optionsArray[$fileOpt + 1], TRUE);
+      }
+      elseif ($dbOpt >= 1) {
+         parseSQLoptions();
+         createTable();    
+      }
+      elseif ($testOpt >=1) {
+         parseSQLoptions($optionsArray);
+         testDBconnect();
+      }
+      else {
+         print "\nWARN: error parsing commandline options.\n";
+         outputHelp();
+         interceptExit();
       }
    }
 
