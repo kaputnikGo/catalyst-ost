@@ -12,10 +12,6 @@ User database entry program.
 
 *********************************************/
 
-   // test the php7 install
-   // and figure how to cmdline output etc.
-   // env: linuxmint 18 - Minty Fresh
-
    // ASSUMPTION anglo-saxon naming convention of a single capitalised first name & surname
    // columns spearated by a comma ($delimiter = ","), and Gaelic "descendant" abbr.
    // NOT looking for MacGregor, will result in Macgregor
