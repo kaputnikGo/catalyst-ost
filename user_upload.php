@@ -44,7 +44,7 @@ GLOBALLED VARS
    $dbpass = ""; // dev: password, to be set by user
    $dbtable = "users"; // set as per spec
 //TODO this for local dev test only, rem at submission
-   $dbname = "catalyst_ost"; // dev machine
+   //$dbname = "catalyst_ost"; // dev machine
 
 
 /*********************
@@ -64,7 +64,7 @@ MYSQL FUNCTIONS
       global $dbhost;
       global $dbuser;
       global $dbpass;
-      global $dbname; // TODO rem
+      //global $dbname; // TODO rem
 
       if (empty($dbhost) || empty($dbuser) || empty($dbpass)) {
          print "\nWARN: either db host,user or pass info missing.\n";
@@ -72,7 +72,7 @@ MYSQL FUNCTIONS
       else {
          // TODO rem $dbname at submission
 
-         $sqlConn = new mysqli($dbhost, $dbuser, $dbpass, $dbname);
+         $sqlConn = new mysqli($dbhost, $dbuser, $dbpass);//, $dbname);
          if ($sqlConn->connect_error) {
             print "\nSQL Connection failed: ".$sqlConn->connect_error."\n";
          } 
@@ -115,12 +115,12 @@ MYSQL FUNCTIONS
       global $dbuser;
       global $dbpass;
       global $dbtable;
-      global $dbname; // TODO rem
+      //global $dbname; // TODO rem
 
       checkDBready();
 
 // TODO rem $dbname at submission
-      $sqlConn = new mysqli($dbhost, $dbuser, $dbpass, $dbname);
+      $sqlConn = new mysqli($dbhost, $dbuser, $dbpass);//, $dbname);
       if ($sqlConn->connect_error) {
          print "\nSQL Connection failed: ".$sqlConn->connect_error."\n";
          interceptExit();
@@ -181,7 +181,7 @@ MYSQL FUNCTIONS
       global $dbuser;
       global $dbpass;
       global $dbtable;
-      global $dbname; // TODO rem
+      //global $dbname; // TODO rem
       
       checkDBready();
 
@@ -192,7 +192,7 @@ MYSQL FUNCTIONS
          $counter = 0;
 
 // TODO rem $dbname at submission
-         $sqlConn = new mysqli($dbhost, $dbuser, $dbpass, $dbname);
+         $sqlConn = new mysqli($dbhost, $dbuser, $dbpass);//, $dbname);
          if ($sqlConn->connect_error) {
             print "\nSQL Connection failed: ".$sqlConn->connect_error."\n";
             inteceptExit();
